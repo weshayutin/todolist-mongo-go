@@ -72,31 +72,34 @@ func CreateItem(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// func UpdateItem(w http.ResponseWriter, r *http.Request) {
-// 	// Get URL parameter from mux
-// 	vars := mux.Vars(r)
-// 	id, _ := strconv.Atoi(vars["id"])
+func UpdateItem(w http.ResponseWriter, r *http.Request) {
+	// Get URL parameter from mux
+	vars := mux.Vars(r)
+	id, _ := strconv.Atoi(vars["id"])
 
-// 	// Test if the TodoItem exist in DB
-// 	err := GetItemByID(id)
-// 	if err == false {
-// 		w.Header().Set("Content-Type", "application/json")
-// 		io.WriteString(w, `{"updated": false, "error": "Record Not Found"}`)
-// 	} else {
-// 		completed, _ := strconv.ParseBool(r.FormValue("completed"))
-// 		log.WithFields(log.Fields{"Id": id, "Completed": completed}).Info("Updating TodoItem")
-// 		todo := &TodoItemModel{}
-// 		db.First(&todo, id)
-// 		todo.Completed = completed
-// 		db.Save(&todo)
-// 		w.Header().Set("Content-Type", "application/json")
-// 		io.WriteString(w, `{"updated": true}`)
-// 	}
-// }
+	// Test if the TodoItem exist in DB
+	err := GetItemByID(id)
+	if err == false {
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"updated": false, "error": "Record Not Found"}`)
+	} else {
+		completed, _ := strconv.ParseBool(r.FormValue("completed"))
+		log.WithFields(log.Fields{"Id": id, "Completed": completed}).Info("Updating TodoItem")
+		// todo := &TodoItemModel{}
+		// db.First(&todo, id)
+		// todo.Completed = completed
+		// db.Save(&todo)
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"updated": true}`)
+	}
+}
 
 func DeleteItem(w http.ResponseWriter, r *http.Request) {
 	// Get URL parameter from mux
 	vars := mux.Vars(r)
+	for k, v := range mux.Vars(r) {
+		log.Info("key=%v, value=%v", k, v)
+	}
 	id, _ := strconv.Atoi(vars["id"])
 	log.Warn("FAK")
 	log.Info(id)
@@ -136,25 +139,46 @@ func GetItemByID(Id int) bool {
 	}
 }
 
-// func GetCompletedItems(w http.ResponseWriter, r *http.Request) {
-// 	log.Info("Get completed TodoItems")
-// 	completedTodoItems := GetTodoItems(true)
-// 	w.Header().Set("Content-Type", "application/json")
-// 	json.NewEncoder(w).Encode(completedTodoItems)
-// }
+func GetCompletedItems(w http.ResponseWriter, r *http.Request) {
+	log.Info("Get completed TodoItems")
+	completedTodoItems := GetTodoItems(true)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(completedTodoItems)
+}
 
-// func GetIncompleteItems(w http.ResponseWriter, r *http.Request) {
-// 	log.Info("Get Incomplete TodoItems")
-// 	IncompleteTodoItems := GetTodoItems(false)
-// 	w.Header().Set("Content-Type", "application/json")
-// 	json.NewEncoder(w).Encode(IncompleteTodoItems)
-// }
+func GetIncompleteItems(w http.ResponseWriter, r *http.Request) {
+	log.Info("Get Incomplete TodoItems")
+	IncompleteTodoItems := GetTodoItems(false)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(IncompleteTodoItems)
+}
 
-// func GetTodoItems(completed bool) interface{} {
-// 	var todos []TodoItemModel
-// 	TodoItems := db.Where("completed = ?", completed).Find(&todos).Value
-// 	return TodoItems
-// }
+func GetTodoItems(completed bool) interface{} {
+	findOptions := options.Find()
+	findOptions.SetLimit(2)
+
+	var results []*TodoItemModel
+	filter := bson.M{"completed": completed}
+	//TodoItems := db.Where("completed = ?", completed).Find(&todos).Value
+	//return TodoItems
+	cur, err := tododb.Find(context.TODO(), filter, findOptions)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Iterate through the cursor
+	for cur.Next(context.TODO()) {
+		var elem TodoItemModel
+		err := cur.Decode(&elem)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		results = append(results, &elem)
+	}
+	return results
+
+}
 
 func Healthz(w http.ResponseWriter, r *http.Request) {
 	log.Info("API Health is OK")
@@ -224,10 +248,10 @@ func main() {
 	router.PathPrefix("/resources/").Handler(http.StripPrefix("/resources/", fs))
 	router.HandleFunc("/", Home).Methods("GET")
 	router.HandleFunc("/healthz", Healthz).Methods("GET")
-	// router.HandleFunc("/todo-completed", GetCompletedItems).Methods("GET")
-	// router.HandleFunc("/todo-incomplete", GetIncompleteItems).Methods("GET")
+	router.HandleFunc("/todo-completed", GetCompletedItems).Methods("GET")
+	router.HandleFunc("/todo-incomplete", GetIncompleteItems).Methods("GET")
 	router.HandleFunc("/todo", CreateItem).Methods("POST")
-	// router.HandleFunc("/todo/{id}", UpdateItem).Methods("POST")
+	router.HandleFunc("/todo/{id}", UpdateItem).Methods("POST")
 	router.HandleFunc("/todo/{id}", DeleteItem).Methods("DELETE")
 
 	handler := cors.New(cors.Options{
