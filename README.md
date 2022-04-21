@@ -80,11 +80,6 @@ MariaDB [todolist]>
 ![gnome-shell-screenshot-edww3e](https://user-images.githubusercontent.com/138787/160934609-a77798a1-3986-46a0-a334-a8b53ceccb7d.png)
 
 
-## testing
-test build
-test2
-test3
-test4
-test5
-test6
+## NOTES
+https://github.com/tfogo/mongodb-go-tutorial/blob/master/main.go
 
