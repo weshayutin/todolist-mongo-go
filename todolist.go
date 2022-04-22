@@ -50,7 +50,7 @@ var db, err = mongo.Connect(context.TODO(), clientOptions)
 var tododb = db.Database("todolist").Collection("TodoItemModel")
 
 type TodoItemModel struct {
-	Id          int `gorm:"primary_key"`
+	Id          primitive.ObjectID `bson:"_id,omitempty"`
 	Description string
 	Completed   bool
 }
@@ -75,21 +75,32 @@ func CreateItem(w http.ResponseWriter, r *http.Request) {
 func UpdateItem(w http.ResponseWriter, r *http.Request) {
 	// Get URL parameter from mux
 	vars := mux.Vars(r)
-	id, _ := strconv.Atoi(vars["id"])
-
+	// id, _ := strconv.Atoi(vars["id"])
+	// id, _ := strconv.ParseInt(vars["id"], 10, 64)
 	// Test if the TodoItem exist in DB
-	fmt.Print(id)
+	id := vars["id"]
 	err := GetItemByID(id)
 	if err == false {
 		w.Header().Set("Content-Type", "application/json")
 		io.WriteString(w, `{"updated": false, "error": "Record Not Found"}`)
 	} else {
 		completed, _ := strconv.ParseBool(r.FormValue("completed"))
-		log.WithFields(log.Fields{"Id": id, "Completed": completed}).Info("Updating TodoItem")
-		// todo := &TodoItemModel{}
-		// db.First(&todo, id)
-		// todo.Completed = completed
-		// db.Save(&todo)
+		log.WithFields(log.Fields{"_id": id, "Completed": completed}).Info("Updating TodoItem")
+		objID, err := primitive.ObjectIDFromHex(id)
+		if err != nil {
+			panic(err)
+		}
+		filter := bson.M{"_id": objID}
+		_, err = tododb.UpdateOne(
+			context.TODO(),
+			filter,
+			bson.D{
+				{"$set", bson.D{{"completed", completed}}},
+			},
+		)
+		if err != nil {
+			fmt.Print(err.Error())
+		}
 		w.Header().Set("Content-Type", "application/json")
 		io.WriteString(w, `{"updated": true}`)
 	}
@@ -101,17 +112,22 @@ func DeleteItem(w http.ResponseWriter, r *http.Request) {
 	for k, v := range mux.Vars(r) {
 		log.Info("key=%v, value=%v", k, v)
 	}
-	id, _ := strconv.Atoi(vars["id"])
-	log.Warn("FAK")
-	log.Info(id)
+	// id, _ := strconv.Atoi(vars["id"])
+	id := vars["id"]
+	// log.Warn("FAK")
+	// log.Info(id)
 	// Test if the TodoItem exist in DB
 	err := GetItemByID(id)
 	if err == false {
 		w.Header().Set("Content-Type", "application/json")
 		io.WriteString(w, `{"deleted": false, "error": "Record Not Found"}`)
 	} else {
-		log.WithFields(log.Fields{"Id": id}).Info("Deleting TodoItem")
-		filter := bson.M{"id": id}
+		log.WithFields(log.Fields{"_id": id}).Info("Deleting TodoItem")
+		objID, err := primitive.ObjectIDFromHex(id)
+		if err != nil {
+			panic(err)
+		}
+		filter := bson.M{"_id": objID}
 		opts := options.Delete().SetCollation(&options.Collation{
 			Locale:    "en_US",
 			Strength:  1,
@@ -127,8 +143,12 @@ func DeleteItem(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func GetItemByID(Id int) bool {
-	filter := bson.M{"id": Id}
+func GetItemByID(Id string) bool {
+	objID, err := primitive.ObjectIDFromHex(Id)
+	if err != nil {
+		panic(err)
+	}
+	filter := bson.M{"_id": objID}
 	var result TodoItemModel
 	err = tododb.FindOne(context.TODO(), filter).Decode(&result)
 	if err != nil {
