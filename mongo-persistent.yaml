@@ -4,34 +4,33 @@ items:
   - kind: Namespace
     apiVersion: v1
     metadata:
-      name: mysql-persistent
+      name: mongo-persistent
       labels:
-        app: mysql
+        app: mongo
   - apiVersion: v1
     kind: ServiceAccount
     metadata:
-      name: mysql-persistent-sa
-      namespace: mysql-persistent
+      name: mongo-persistent-sa
+      namespace: mongo-persistent
       labels:
-        component: mysql-persistent
+        component: mongo-persistent
   - apiVersion: v1
     kind: PersistentVolumeClaim
     metadata:
-      name: mysql
-      namespace: mysql-persistent
+      name: mongo
+      namespace: mongo-persistent
       labels:
-        app: mysql
+        app: mongo
     spec:
       accessModes:
       - ReadWriteOnce
-      storageClassName: gp2-csi
       resources:
         requests:
           storage: 1Gi
   - kind: SecurityContextConstraints
     apiVersion: security.openshift.io/v1
     metadata:
-      name: mysql-persistent-scc
+      name: mongo-persistent-scc
     allowPrivilegeEscalation: true
     allowPrivilegedContainer: true
     runAsUser:
@@ -46,78 +45,76 @@ items:
     - '*'
     users:
     - system:admin
-    - system:serviceaccount:mysql-persistent:mysql-persistent-sa
+    - system:serviceaccount:mongo-persistent:mongo-persistent-sa
   - apiVersion: v1
     kind: Service
     metadata:
       annotations:
-        template.openshift.io/expose-uri: mariadb://{.spec.clusterIP}:{.spec.ports[?(.name=="mysql")].port}
-      name: mysql
-      namespace: mysql-persistent
+        template.openshift.io/expose-uri: mongodb://{.spec.clusterIP}:{.spec.ports[?(.name=="mongo")].port}
+      name: mongo
+      namespace: mongo-persistent
       labels:
-        app: mysql
-        service: mysql
+        app: mongo
+        service: mongo
     spec:
       ports:
       - protocol: TCP
-        name: mysql
-        port: 3306
+        name: mongo
+        port: 27017
       selector:
-        app: mysql
+        app: mongo
   - apiVersion: apps/v1
     kind: Deployment
     metadata:
       annotations:
         template.alpha.openshift.io/wait-for-ready: 'true'
-      name: mysql
-      namespace: mysql-persistent
+      name: mongo
+      namespace: mongo-persistent
       labels:
         e2e-app: "true"
     spec:
       selector:
         matchLabels:
-          app: mysql
+          app: mongo
       strategy:
         type: Recreate
       template:
         metadata:
           labels:
             e2e-app: "true"
-            app: mysql
+            app: mongo
         spec:
-          serviceAccountName: mysql-persistent-sa
+          serviceAccountName: mongo-persistent-sa
           containers:
-          - image: registry.redhat.io/rhel8/mariadb-105:latest
-            name: mysql
+          - image: mongo:latest
+            name: mongo
             securityContext:
               privileged: true
             env:
-              - name: MYSQL_USER
+              - name: MONGO_INITDB_ROOT_USERNAME
                 value: changeme
-              - name: MYSQL_PASSWORD
+              - name: MONGO_INITDB_ROOT_PASSWORD
                 value: changeme
-              - name: MYSQL_ROOT_PASSWORD
-                value: root
-              - name: MYSQL_DATABASE
+              - name: MONGO_INITDB_DATABASE
                 value: todolist
             ports:
-            - containerPort: 3306
-              name: mysql
+            - containerPort: 27017
+              name: mongo
             resources:
               limits:
                 memory: 512Mi
             volumeMounts:
-            - name: mysql-data
-              mountPath: /var/lib/mysql
+            - name: mongo-data
+              mountPath: /data/db
           volumes:
-          - name: mysql-data
+          - name: mongo-data
             persistentVolumeClaim:
-              claimName: mysql
+              claimName: mongo
   - apiVersion: v1
     kind: Service
     metadata:
       name: todolist
-      namespace: mysql-persistent
+      namespace: mongo-persistent
       labels:
         app: todolist
         service: todolist
@@ -133,7 +130,7 @@ items:
     kind: DeploymentConfig
     metadata:
       name: todolist
-      namespace: mysql-persistent
+      namespace: mongo-persistent
       labels:
         app: todolist
         service: todolist
@@ -152,22 +149,19 @@ items:
         spec:
           containers:
           - name: todolist
-            image:  quay.io/rhn_engineering_whayutin/todolist-mariadb-go:3
-            env:
-              - name: foo
-                value: bar
+            image:  quay.io/rhn_engineering_whayutin/todolist-mongo-go:2
             ports:
               - containerPort: 8000
                 protocol: TCP
           initContainers:
           - name: init-myservice
             image: registry.access.redhat.com/ubi8/ubi:latest
-            command: ['sh', '-c', 'sleep 10; until getent hosts mysql; do echo waiting for mysql; sleep 5; done;']
+            command: ['sh', '-c', 'sleep 10; until getent hosts mongo; do echo waiting for mongo; sleep 5; done;']
   - apiVersion: route.openshift.io/v1
     kind: Route
     metadata:
       name: todolist-route
-      namespace: mysql-persistent
+      namespace: mongo-persistent
     spec:
       path: "/"
       to:

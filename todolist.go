@@ -42,8 +42,10 @@ import (
 )
 
 // remote connection
-// Set client options
-var clientOptions = options.Client().ApplyURI("mongodb://changeme:changeme@localhost:27017")
+var clientOptions = options.Client().ApplyURI("mongodb://changeme:changeme@mongo:27017")
+
+// local connection
+//var clientOptions = options.Client().ApplyURI("mongodb://changeme:changeme@localhost:27017")
 
 // Connect to MongoDB
 var db, err = mongo.Connect(context.TODO(), clientOptions)
@@ -234,8 +236,6 @@ func prepopulate(collection *mongo.Collection) {
 }
 
 func main() {
-	var clientOptions = options.Client().ApplyURI("mongodb://changeme:changeme@localhost:27017")
-
 	// Connect to MongoDB
 	var db, err = mongo.Connect(context.TODO(), clientOptions)
 	if err != nil {
