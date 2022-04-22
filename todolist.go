@@ -78,6 +78,7 @@ func UpdateItem(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.Atoi(vars["id"])
 
 	// Test if the TodoItem exist in DB
+	fmt.Print(id)
 	err := GetItemByID(id)
 	if err == false {
 		w.Header().Set("Content-Type", "application/json")
@@ -110,7 +111,7 @@ func DeleteItem(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, `{"deleted": false, "error": "Record Not Found"}`)
 	} else {
 		log.WithFields(log.Fields{"Id": id}).Info("Deleting TodoItem")
-		filter := bson.M{"_id": id}
+		filter := bson.M{"id": id}
 		opts := options.Delete().SetCollation(&options.Collation{
 			Locale:    "en_US",
 			Strength:  1,
@@ -127,7 +128,7 @@ func DeleteItem(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetItemByID(Id int) bool {
-	filter := bson.M{"_id": Id}
+	filter := bson.M{"id": Id}
 	var result TodoItemModel
 	err = tododb.FindOne(context.TODO(), filter).Decode(&result)
 	if err != nil {
