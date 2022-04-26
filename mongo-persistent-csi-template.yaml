@@ -6,7 +6,7 @@ items:
     metadata:
       name: mongo-persistent
       labels:
-        app: mongo
+        app: todolist-mongo-go
   - apiVersion: v1
     kind: ServiceAccount
     metadata:
@@ -14,20 +14,6 @@ items:
       namespace: mongo-persistent
       labels:
         component: mongo-persistent
-  - apiVersion: v1
-    kind: PersistentVolumeClaim
-    metadata:
-      name: mongo
-      namespace: mongo-persistent
-      labels:
-        app: mongo
-    spec:
-      accessModes:
-      - ReadWriteOnce
-      storageClassName: gp2-csi
-      resources:
-        requests:
-          storage: 1Gi
   - kind: SecurityContextConstraints
     apiVersion: security.openshift.io/v1
     metadata:
@@ -48,22 +34,29 @@ items:
     - system:admin
     - system:serviceaccount:mongo-persistent:mongo-persistent-sa
   - apiVersion: v1
-    kind: Service
+    kind: PersistentVolumeClaim
     metadata:
-      annotations:
-        template.openshift.io/expose-uri: mongodb://{.spec.clusterIP}:{.spec.ports[?(.name=="mongo")].port}
       name: mongo
       namespace: mongo-persistent
       labels:
         app: mongo
-        service: mongo
     spec:
-      ports:
-      - protocol: TCP
-        name: mongo
-        port: 27017
-      selector:
-        app: mongo
+      accessModes:
+      - ReadWriteOnce
+      storageClassName: gp2-csi
+      resources:
+        requests:
+          storage: 1Gi
+  - kind: ImageStream
+    apiVersion: image.openshift.io/v1
+    metadata:
+      name: todolist-mongo-go
+      namespace: mongo-persistent
+      labels:
+        app: todolist
+    spec: {}
+    status:
+      dockerImageRepository: ''
   - apiVersion: apps/v1
     kind: Deployment
     metadata:
@@ -114,19 +107,52 @@ items:
   - apiVersion: v1
     kind: Service
     metadata:
-      name: todolist
+      annotations:
+        template.openshift.io/expose-uri: mongodb://{.spec.clusterIP}:{.spec.ports[?(.name=="mongo")].port}
+      name: mongo
       namespace: mongo-persistent
       labels:
-        app: todolist
-        service: todolist
+        app: mongo
+        service: mongo
     spec:
       ports:
-        - name: web
-          port: 8000
-          targetPort: 8000
+      - protocol: TCP
+        name: mongo
+        port: 27017
       selector:
-        app: todolist
-        service: todolist
+        app: mongo
+  - kind: BuildConfig
+    apiVersion: build.openshift.io/v1
+    metadata:
+      name: todolist-mongo-go
+      namespace: mongo-persistent
+      labels:
+        app.kubernetes.io/name: todolist-mongo-go
+    spec:
+      triggers:
+      - type: GitHub
+        github:
+          secret: 4Xwu0tyAab90aaoasd88qweAasdaqvjknfrl3qwpo
+      - type: Generic
+        generic:
+          secret: 4Xwu0tyAab90aaoasd88qweAasdaqvjknfrl3qwpo
+      - type: ConfigChange
+      - type: ImageChange
+        imageChange: {}
+      source:
+        type: Git
+        git:
+          uri: https://github.com/weshayutin/todolist-mongo-go.git
+          ref: master
+      strategy:
+        type: Docker
+        dockerStrategy:
+          dockerfilePath: Dockerfile
+      output:
+        to:
+          kind: ImageStreamTag
+          name: "todolist-mongo-go:latest"
+      resources: {}
   - apiVersion: apps.openshift.io/v1
     kind: DeploymentConfig
     metadata:
@@ -134,23 +160,42 @@ items:
       namespace: mongo-persistent
       labels:
         app: todolist
-        service: todolist
+        deploymentconfig: todolist-mongo-go
     spec:
-      replicas: 1
       selector:
         app: todolist
-        service: todolist
       strategy:
-        type: Recreate
+        type: Rolling
+      triggers:
+        - type: ConfigChange
+          imageChangeParams:
+            containerNames:
+              - todolist
+            from:
+              kind: ImageStreamTag
+              namespace: mongo-persistent
+              name: 'todolist-mongo-go:latest'
+        - type: ImageChange
+          imageChangeParams:
+            automatic: true
+            containerNames:
+              - todolist
+            from:
+              kind: ImageStreamTag
+              namespace: mongo-persistent
+              name: 'todolist-mongo-go:latest'
+      replicas: 1
       template:
         metadata:
+          creationTimestamp:
           labels:
+            e2e-app: "true"
             app: todolist
-            service: todolist
         spec:
           containers:
           - name: todolist
-            image:  quay.io/rhn_engineering_whayutin/todolist-mongo-go:2
+            image:  >-
+              image-registry.openshift-image-registry.svc:5000/mongo-persistent/todolist-mongo-go
             ports:
               - containerPort: 8000
                 protocol: TCP
@@ -158,6 +203,28 @@ items:
           - name: init-myservice
             image: registry.access.redhat.com/ubi8/ubi:latest
             command: ['sh', '-c', 'sleep 10; until getent hosts mongo; do echo waiting for mongo; sleep 5; done;']
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: todolist
+      namespace: mongo-persistent
+      labels:
+        app: todolist
+        service: todolist
+      annotations:
+        app: todolist
+    spec:
+      ports:
+        - name: web
+          protocol: TCP
+          port: 8000
+          targetPort: 8000
+      selector:
+        app: todolist
+      sessionAffinity: None
+      ipFamilies:
+        - IPv4
+      ipFamilyPolicy: SingleStack
   - apiVersion: route.openshift.io/v1
     kind: Route
     metadata:
