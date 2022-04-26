@@ -38,3 +38,4 @@ Show items in the db:  http://localhost:8081/db/todolist/
 
 ## Notes:
 * https://redhat-scholars.github.io/openshift-starter-guides/rhs-openshift-starter-guides/4.7/nationalparks-java-codechanges-github.html#webhooks_with_openshift
+*
