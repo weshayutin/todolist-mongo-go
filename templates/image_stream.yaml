@@ -7,7 +7,7 @@ items:
       name: todolist-mongo-go
       namespace: mongo-persistent
       labels:
-        app: todolist-mongo-go
+        app: todolist
     spec: {}
     status:
       dockerImageRepository: ''
