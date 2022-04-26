@@ -6,11 +6,17 @@ metadata:
   labels:
     app: todolist
     service: todolist
+  annotations:
+    app: todolist
 spec:
   ports:
     - name: web
+      protocol: TCP
       port: 8000
       targetPort: 8000
   selector:
     app: todolist
-    service: todolist
+  sessionAffinity: None
+  ipFamilies:
+    - IPv4
+  ipFamilyPolicy: SingleStack
