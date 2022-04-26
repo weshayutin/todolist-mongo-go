@@ -194,6 +194,7 @@ items:
             app: todolist
             application: todolist
             deploymentconfig: todolist-mongo-go
+            app.kubernetes.io/name: todolist
         spec:
           containers:
           - name: todolist
