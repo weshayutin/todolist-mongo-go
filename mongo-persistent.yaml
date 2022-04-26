@@ -123,10 +123,10 @@ items:
   - kind: BuildConfig
     apiVersion: build.openshift.io/v1
     metadata:
-      name: todolist-mongo-go
+      name: todolist
       namespace: mongo-persistent
       labels:
-        app.kubernetes.io/name: todolist-mongo-go
+        app.kubernetes.io/name: todolist
     spec:
       triggers:
       - type: GitHub
@@ -159,6 +159,8 @@ items:
       namespace: mongo-persistent
       labels:
         app: todolist
+        app.kubernetes.io/name: todolist
+        application: todolist
         deploymentconfig: todolist-mongo-go
     spec:
       selector:
@@ -190,6 +192,8 @@ items:
           labels:
             e2e-app: "true"
             app: todolist
+            application: todolist
+            deploymentconfig: todolist-mongo-go
         spec:
           containers:
           - name: todolist
