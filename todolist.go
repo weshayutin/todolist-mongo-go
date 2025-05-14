@@ -108,15 +108,16 @@ func CreateItem(w http.ResponseWriter, r *http.Request) {
 	log.WithFields(log.Fields{"description": description}).Info("Add new TodoItem. Saving to database.")
 	todo := &TodoItemModel{Description: description, Completed: false}
 	result, err := tododb.InsertOne(context.TODO(), todo)
-	id := result.InsertedID.(primitive.ObjectID).Hex()
-	log.Info("inserted document with ID %v\n", id)
+	id := result.InsertedID.(primitive.ObjectID)
+	todo.Id = id
+	log.Info("inserted document with ID %v\n", id.Hex())
 	if err != nil {
 		log.Fatal(err)
 	} else {
-		result := make(map[string]string)
-		result["Id"] = id
+		// result := make(map[string]string)
+		// result["Id"] = id
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(result)
+		json.NewEncoder(w).Encode(todo)
 	}
 }
 
@@ -315,16 +316,6 @@ func main() {
 	// collection
 	tododb = db.Database("todolist").Collection("TodoItemModel")
 	fmt.Println("Connected to MongoDB!")
-
-	// check to see if the db is prepopulated
-	filter := bson.D{{"description", "time"}}
-	var result TodoItemModel
-	err = tododb.FindOne(context.TODO(), filter).Decode(&result)
-	if err != nil {
-		prepopulate(tododb)
-	} else {
-		fmt.Printf("%+v\n", result)
-	}
 
 	fs := http.FileServer(http.Dir("./resources/"))
 

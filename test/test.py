@@ -5,7 +5,7 @@ import argparse
 from datetime import datetime
 import json
 import requests
-
+import pdb
 
 
 def updateToDo(base_url, id, completed):
@@ -151,7 +151,7 @@ def main():
    # create date
    date = datetime.today().strftime('%Y-%m-%d-%H:%M:%S')
    # create todo items
-   test1 = createToDo(base_url, "pytest-1-" + date, False)
+   test1 = createToDo(base_url, "pytest-1-" + date, False)   
    test2 = createToDo(base_url, "pytest-2-" + date, False)
    test3 = createToDo(base_url, "pytest-1-" + date, False)
 
@@ -170,10 +170,9 @@ def main():
    # test complete or incomplete
    found_completed = False
    for i in completed:
-       print("DEBUG test1: " + str(test1))
-       print("DEBUG i: " + str(i))
        if test1["Description"] == i["Description"]:
           found_completed = True
+          
 
    found_incomplete = False
    for i in incomplete:
@@ -182,6 +181,7 @@ def main():
    
    if found_completed == False or found_incomplete == False:
       print("FAILED complete / incomplete TEST")
+      exit(1)
    else:
       print("SUCCESS!")
 
@@ -190,10 +190,6 @@ def main():
    deleteToDoItems(base_url, test3)
    completed = checkToDoLists(base_url, True)
    incomplete = checkToDoLists(base_url, False)
-   print("COMPLETED ITEMS:")
-   print(completed)
-   print("INCOMPLETE ITEMS:")
-   print(incomplete)
 
    # Test deleted items
    found_completed = False
@@ -208,6 +204,7 @@ def main():
     
    if found_completed == True or found_incomplete == True:
       print("FAILED Delete TEST")
+      exit(1)
    else:
       print("SUCCESS!")
 
@@ -216,8 +213,9 @@ def main():
      print("LOG FOUND: SUCCESS!")
    else:
      print("FAILED!")
-   
+     exit(1)
 
+   print("FULL TEST PASSED!")
 
 if __name__ == "__main__":
     main()
