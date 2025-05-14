@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"path"
 	"strconv"
 
@@ -38,23 +39,68 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 )
 
 // remote connection
-var clientOptions = options.Client().ApplyURI("mongodb://changeme:changeme@mongo:27017")
+//var clientOptions = options.Client().ApplyURI("mongodb://changeme:changeme@mongo:27017")
 
 // local connection
 //var clientOptions = options.Client().ApplyURI("mongodb://changeme:changeme@localhost:27017")
 
 // Connect to MongoDB
-var db, err = mongo.Connect(context.TODO(), clientOptions)
-var tododb = db.Database("todolist").Collection("TodoItemModel")
+// var db, err = mongo.Connect(context.TODO(), clientOptions)
+// var tododb = db.Database("todolist").Collection("TodoItemModel")
+
+var db *mongo.Client
+var tododb *mongo.Collection
 
 type TodoItemModel struct {
 	Id          primitive.ObjectID `bson:"_id,omitempty"`
 	Description string
 	Completed   bool
+}
+
+func connectToMongo() *mongo.Client {
+	remote := connectToMongoRemote()
+	pingErr := remote.Ping(context.TODO(), nil)
+	if pingErr != nil {
+		log.Error("Failed to ping remoteMongoDB")
+	}
+	if pingErr != nil {
+		local := connectToMongoLocal()
+		if local == nil {
+			log.Fatal("Failed to connect to MongoDB")
+			return nil
+		}
+		db = local
+	} else {
+		db = remote
+	}
+	return db
+}
+
+func connectToMongoLocal() *mongo.Client {
+	log.Info("Attempting to connect to: mongodb://changeme:changeme@localhost:27017")
+	clientOptions := options.Client().ApplyURI("mongodb://changeme:changeme@localhost:27017")
+	db, err := mongo.Connect(context.TODO(), clientOptions)
+	if err != nil {
+		log.Error(("Local Connection failed"))
+		return nil
+	}
+	return db
+}
+
+func connectToMongoRemote() *mongo.Client {
+	log.Info("Attempting to connect to: mongodb://changeme:changeme@mongo:27017")
+	clientOptions := options.Client().ApplyURI("mongodb://changeme:changeme@mongo:27017")
+	db, err := mongo.Connect(context.TODO(), clientOptions)
+	if err != nil {
+		log.Error(("Remote Connection failed"))
+		return nil
+	}
+	return db
 }
 
 func CreateItem(w http.ResponseWriter, r *http.Request) {
@@ -178,7 +224,7 @@ func GetIncompleteItems(w http.ResponseWriter, r *http.Request) {
 
 func GetTodoItems(completed bool) interface{} {
 	findOptions := options.Find()
-	findOptions.SetLimit(2)
+	findOptions.SetLimit(50)
 
 	var results []*TodoItemModel
 	filter := bson.M{"completed": completed}
@@ -235,22 +281,40 @@ func prepopulate(collection *mongo.Collection) {
 	fmt.Println("Inserted multiple prepopulate documents: ", insertManyResult.InsertedIDs)
 }
 
+func GetLogFile(w http.ResponseWriter, r *http.Request) {
+	// if file not found we simply get a 404
+	filename := "/tmp/log/todoapp/app.log"
+	http.ServeFile(w, r, filename)
+}
+
+func faviconHandler(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, "favicon.ico")
+}
+
 func main() {
+	// logging to volume
+	if _, err := os.Stat("/tmp/log/todoapp"); os.IsNotExist(err) {
+		os.MkdirAll("/tmp/log/todoapp", 0700)
+	}
+	f, err := os.OpenFile("/tmp/log/todoapp/app.log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	// if directory or volume is not mounted, do not exit
+	if err != nil {
+		fmt.Println("Failed to create logfile" + "logrus.txt")
+		logrus.Info("Failed: log file /tmp/log/todoapp/app.log create failed")
+		f.Close()
+	} else {
+		defer f.Close()
+		multi := io.MultiWriter(f, os.Stdout)
+		logrus.SetOutput(multi)
+		logrus.Info("Success: Attached volume and redirected logs to /tmp/log/todoapp/app.log")
+	}
+
 	// Connect to MongoDB
-	var db, err = mongo.Connect(context.TODO(), clientOptions)
-	if err != nil {
-		log.Fatal(err)
-	}
+	db = connectToMongo()
 
-	// Check the connection
-	err = db.Ping(context.TODO(), nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Println("Connected to MongoDB!")
 	// collection
-	tododb := db.Database("todolist").Collection("TodoItemModel")
+	tododb = db.Database("todolist").Collection("TodoItemModel")
+	fmt.Println("Connected to MongoDB!")
 
 	// check to see if the db is prepopulated
 	filter := bson.D{{"description", "time"}}
@@ -268,7 +332,9 @@ func main() {
 	router := mux.NewRouter()
 	router.PathPrefix("/resources/").Handler(http.StripPrefix("/resources/", fs))
 	router.HandleFunc("/", Home).Methods("GET")
+	router.HandleFunc("/favicon.ico", faviconHandler)
 	router.HandleFunc("/healthz", Healthz).Methods("GET")
+	router.HandleFunc("/log", GetLogFile).Methods("GET")
 	router.HandleFunc("/todo-completed", GetCompletedItems).Methods("GET")
 	router.HandleFunc("/todo-incomplete", GetIncompleteItems).Methods("GET")
 	router.HandleFunc("/todo", CreateItem).Methods("POST")
